@@ -7,4 +7,4 @@ TO-DO:
 
 할수도있는거:
 backend 연결
-3rd-party 로그인 연동동
+3rd-party 로그인 연동
