@@ -1,11 +1,47 @@
-import React, { useState, useEffect, useRef } from "react"; // MODIFIED: import useRef
+import React, { useState, useEffect, useRef } from "react";
 import "./App.css";
 import photo1 from "./assets/photo1.jpg";
 import photo2 from "./assets/photo2.jpg";
 import photo3 from "./assets/photo3.jpg";
 import photo4 from "./assets/photo4.jpg";
 
+
+// 로그인 처리 로직
+function LoginForm({ onLogin }) {
+  const [id, setId] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (id.trim()) onLogin(id.trim());
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="login-form">
+      <input
+        type="text"
+        placeholder="아이디를 입력해주세요"
+        value={id}
+        onChange={(e) => setId(e.target.value)}
+        required // 반드시 채워야 함함
+      />
+    </form>
+  );
+}
+
 function App() {
+  const [user, setUser] = useState(() => localStorage.getItem('user'));
+
+  useEffect(() => {
+    if (user) localStorage.setItem('user', user);
+    else localStorage.removeItem('user');
+  }, [user]);
+
+  const handleLogin = (id) => setUser(id);
+  const handleLogout = () => {
+    setUser(null);
+    setIsEditing(false);
+  };
+
   const defaultPhotos = [
     {
       id: 1,
@@ -39,7 +75,6 @@ function App() {
     },
   ];
 
-  // lazy init
   const [photos, setPhotos] = useState(() => {
     const saved = localStorage.getItem("photos");
     if (saved) {
@@ -60,16 +95,19 @@ function App() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState(null);
-  const fileInputRef = useRef(null); // file input 직접 통제
+  const fileInputRef = useRef(null);
 
-  // sync to localStorage
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+
   useEffect(() => {
     try {
       localStorage.setItem("photos", JSON.stringify(photos));
     } catch (error) {
       console.error("Error saving photos to localStorage:", error);
     }
-  }, [photos]); // photos에 변화 생기면 자동으로 callback
+  }, [photos]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0] || null);
@@ -85,7 +123,7 @@ function App() {
         title: title.trim(),
         description: description.trim(),
         src: reader.result,
-        ownerId: "currentUser", // TO-DO: implementing login
+        ownerId: user,
       };
       setPhotos((prev) => [newPhoto, ...prev]);
       setTitle("");
@@ -97,9 +135,46 @@ function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleDelete = (id) => {
+    setPhotos(photos.filter((p) => p.id !== id));
+    setSelected(null);
+    setIsEditing(false);
+  };
+
+  const handleEditStart = (photo) => {
+    setIsEditing(true);
+    setEditTitle(photo.title);
+    setEditDescription(photo.description);
+  };
+
+  const handleEditSave = (id) => {
+    const updated = photos.map((p) =>
+      p.id === id
+        ? { ...p, title: editTitle.trim(), description: editDescription.trim() }
+        : p
+    );
+    setPhotos(updated);
+    const newSelected = updated.find((p) => p.id === id);
+    setSelected(newSelected);
+    setIsEditing(false);
+  };
+
+  if (!user) {
+    return (
+      <div className="app">
+        <h1>Simple Photo Gallery Login</h1>
+        <LoginForm onLogin={handleLogin} />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <h1>Simple Photo Gallery</h1>
+      <div className="user-info">
+        <span>현재 ID: {user} </span>
+        <button onClick={handleLogout}>로그아웃</button>
+      </div>
       <button
         className="toggle-button"
         onClick={() => setShowForm((prev) => !prev)}
@@ -146,13 +221,65 @@ function App() {
       </div>
 
       {selected && (
-        <div className="modal" onClick={() => setSelected(null)}>
+        <div
+          className="modal"
+          onClick={() => {
+            setSelected(null);
+            setIsEditing(false);
+          }}
+        >
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <img src={selected.src} alt={selected.title} />
             <h2>{selected.title}</h2>
             <p>작성자: {selected.ownerId}</p>
             <p>{selected.description}</p>
-            <button onClick={() => setSelected(null)}>Close</button>
+
+            {selected.ownerId === user && (
+              <div className="actions">
+                {isEditing ? (
+                  <form
+                    className="upload-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleEditSave(selected.id);
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Title"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      required
+                    />
+                    <textarea
+                      placeholder="Description"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                    />
+                    <button type="submit">저장</button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(false)}
+                    >
+                      취소
+                    </button>
+                  </form>
+                ) : (
+                  <>  
+                    <button onClick={() => handleEditStart(selected)}>수정</button>
+                    <button onClick={() => handleDelete(selected.id)}>삭제</button>
+                  </>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setSelected(null);
+                setIsEditing(false);
+              }}
+            >
+              닫기
+            </button>
           </div>
         </div>
       )}
